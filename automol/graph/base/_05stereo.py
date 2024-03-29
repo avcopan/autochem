@@ -22,6 +22,7 @@ from automol.graph.base._00core import (
     stereo_parities,
     tetrahedral_atoms,
 )
+from automol.graph.base._02algo import rings_atom_keys
 from automol.graph.base._03kekule import (
     rigid_planar_bonds,
     rigid_planar_bonds_with_ring_constraints,
@@ -127,9 +128,7 @@ def bond_stereodetermining_neighbor_keys(
 
 
 def unassigned_stereocenter_keys_from_candidates(
-    gra,
-    cand_dct: CenterNeighborDict,
-    pri_dct: Optional[Dict[AtomKey, int]] = None,
+    gra, cand_dct: CenterNeighborDict, pri_dct: Dict[AtomKey, int]
 ) -> CenterKeys:
     """Identify true, unassigned stereocenters from candidates, given a priority mapping
 
@@ -142,39 +141,103 @@ def unassigned_stereocenter_keys_from_candidates(
     :return: The atom and bond stereocenter candidates as separate dictionaries
     :rtype: CenterKeys
     """
-    pri_dct = negate_hydrogen_stereo_priorities(gra, pri_dct, with_none=True)
-    ste_dct = stereocenters_from_candidates(cand_dct, pri_dct)
-    ste_keys = frozenset(ste_dct) - stereo_keys(gra)
-    return ste_keys
+    return frozenset(
+        stereocenters_from_candidates(gra, cand_dct, pri_dct, new_only=True)
+    )
 
 
 def stereocenters_from_candidates(
-    cand_dct: CenterNeighborDict, pri_dct: Dict[AtomKey, int]
+    gra: Any,
+    cand_dct: CenterNeighborDict,
+    pri_dct: Dict[AtomKey, int],
+    new_only: bool = False,
 ) -> CenterNeighborDict:
-    """Get true stereocenters from stereocenter candidates
+    """Get stereocenters from stereocenter candidates
 
+    :param gra: A molecular graph
+    :param cand_dct: A mapping of stereocenter candidates onto their neighbor keys
+    :param pri_dct: An atom priority mapping for detecting stereogenic centers
+    :param new_only: Only return the new stereocenters, without existing assignments?
+    :return: The stereocenter candidates that are stereogenic, with sorted neighbors
+    """
+
+    def _simple_stereoatom(nkeys):
+        pris = list(map(pri_dct.get, nkeys))
+        return len(set(pris)) == len(pris)
+
+    def _simple_stereobond(nkeys):
+        pris = [list(map(pri_dct.get, nks)) for nks in nkeys]
+        return all(len(ps) == 1 or len(set(ps)) == len(ps) for ps in pris)
+
+    pri_dct = negate_hydrogen_stereo_priorities(gra, pri_dct, with_none=True)
+    # ^ I don't remember why I did this, but leaving it in for now...
+
+    cand_atm_dct, cand_bnd_dct = sort_stereocenter_candidates(cand_dct, pri_dct)
+
+    # Find simple stereoatoms and stereobonds
+    ste_dct = {}
+    ste_dct.update(
+        {k: nks for k, nks in cand_atm_dct.items() if _simple_stereoatom(nks)}
+    )
+    ste_dct.update(
+        {k: nks for k, nks in cand_bnd_dct.items() if _simple_stereobond(nks)}
+    )
+
+    # Find hidden ring stereoatoms
+    ste_dct.update(hidden_ring_stereoatoms_from_candidates(gra, cand_dct, pri_dct))
+
+    if new_only:
+        ste_keys = stereo_keys(gra)
+        ste_dct = {k: nks for k, nks in ste_dct.items() if k not in ste_keys}
+
+    return ste_dct
+
+
+def hidden_ring_stereoatoms_from_candidates(
+    gra: Any, cand_dct: CenterNeighborDict, pri_dct: Dict[AtomKey, int]
+) -> CenterNeighborDict:
+    r"""Get hidden ring stereoatoms from stereocenter candidates
+
+    If a ring contains multiple tetrahedral atoms with distinct outer groups, these have
+    stereochemistry relative to each other.
+
+        group 1                         group 3
+         \                             /
+         [ring atom 1]-...-[ring atom 2]
+         /                             \
+        group 2                         group 4
+
+    When the ring is topologically symmetric, however, these stereoatoms will be
+    "hidden" because their in-ring neighbors appear (from the graph) to be equivalent.
+
+    This function returns these hidden stereoatoms.
+
+    :param gra: A molecular graph
     :param cand_dct: A mapping of stereocenter candidates onto their neighbor keys
     :param pri_dct: An atom priority mapping for detecting stereogenic centers
     :return: The stereocenter candidates that are stereogenic, with sorted neighbors
     """
 
-    def _atom_is_stereogenic(nkeys):
+    def _simple_stereoatom(nkeys):
         pris = list(map(pri_dct.get, nkeys))
         return len(set(pris)) == len(pris)
 
-    def _bond_is_stereogenic(nkeys):
-        pris = [list(map(pri_dct.get, nks)) for nks in nkeys]
-        return all(len(ps) == 1 or len(set(ps)) == len(ps) for ps in pris)
+    # First, remove the simple stereoatoms
+    cand_dct, _ = sort_stereocenter_candidates(cand_dct, pri_dct)
+    cand_dct = {k: nks for k, nks in cand_dct.items() if not _simple_stereoatom(nks)}
 
-    cand_atm_dct, cand_bnd_dct = sort_stereocenter_candidates(cand_dct, pri_dct)
-
+    # Loop over rings looking for hidden stereoatoms
     ste_dct = {}
-    ste_dct.update(
-        {k: nks for k, nks in cand_atm_dct.items() if _atom_is_stereogenic(nks)}
-    )
-    ste_dct.update(
-        {k: nks for k, nks in cand_bnd_dct.items() if _bond_is_stereogenic(nks)}
-    )
+    for rkeys in map(set, rings_atom_keys(gra)):
+        keys = [k for k in cand_dct if k in rkeys]
+        nkeys_lst = list(map(cand_dct.get, keys))
+        okeys_lst = [[nk for nk in nks if nk not in rkeys] for nks in nkeys_lst]
+        # Find keys in the ring with distinct outer groups
+        keys = [k for k, oks in zip(keys, okeys_lst) if _simple_stereoatom(oks)]
+        # If there is more than one, all of them are hidden stereoatoms
+        if len(keys) > 1:
+            ste_dct.update({k: nks for k, nks in cand_dct.items() if k in keys})
+
     return ste_dct
 
 
