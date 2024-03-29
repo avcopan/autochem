@@ -1734,6 +1734,7 @@ def test__geometries_parity_mismatches():
 
 def test__stereogenic_keys():
     """test graph.stereogenic_atom_keys"""
+    print(graph.unassigned_stereocenter_keys(C8H13O_CGR))
     assert graph.unassigned_stereocenter_keys(C8H13O_CGR) == frozenset(
         {
             6,
@@ -2485,4 +2486,5 @@ if __name__ == "__main__":
     # test__stereo_corrected_geometry()
     # test__embed__clean_geometry()
     # test__rotational_coordinates()
-    test__stereo_corrected_geometry()
+    # test__stereo_corrected_geometry()
+    test__stereogenic_keys()

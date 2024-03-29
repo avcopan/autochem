@@ -5,6 +5,7 @@ import numbers
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy
+
 from automol import util
 from automol.geom import base as geom_base
 from automol.graph.base._00core import (
@@ -142,33 +143,20 @@ def unassigned_stereocenter_keys_from_candidates(
     :rtype: CenterKeys
     """
     pri_dct = negate_hydrogen_stereo_priorities(gra, pri_dct, with_none=True)
-    ste_atm_dct, ste_bnd_dct = stereocenter_candidates_grouped(
-        cand_dct, pri_dct=pri_dct, drop_nonste=True
-    )
-    ste_keys = frozenset(ste_atm_dct) | frozenset(ste_bnd_dct)
-    ste_keys -= stereo_keys(gra)
+    ste_dct = stereocenters_from_candidates(cand_dct, pri_dct)
+    ste_keys = frozenset(ste_dct) - stereo_keys(gra)
     return ste_keys
 
 
-def stereocenter_candidates_grouped(
-    cand_dct: CenterNeighborDict,
-    pri_dct: Optional[Dict[AtomKey, int]] = None,
-    drop_nonste: bool = False,
-) -> Tuple[AtomNeighborDict, BondNeighborDict]:
-    """Group stereocenter candidates by type
+def stereocenters_from_candidates(
+    cand_dct: CenterNeighborDict, pri_dct: Dict[AtomKey, int]
+) -> CenterNeighborDict:
+    """Get true stereocenters from stereocenter candidates
 
     :param cand_dct: A mapping of stereocenter candidates onto their neighbor keys
-    :type cand_dct: CenterNeighborDict
-    :param pri_dct: An optional atom priority mapping for sorting the neighbor keys
-    :type pri_dct: Optional[Dict[AtomKey, int]]
-    :param drop_nonste: Drop non-stereogenic candidates, based on priorities?
-    :type drop_nonste: bool, optional
-    :return: The atom and bond stereocenter candidates as separate dictionaries
-    :rtype: Tuple[AtomNeighborDict, BondNeighborDict]
+    :param pri_dct: An atom priority mapping for detecting stereogenic centers
+    :return: The stereocenter candidates that are stereogenic, with sorted neighbors
     """
-    assert not (
-        drop_nonste and pri_dct is None
-    ), "Droping non-stereogenics requires priorities"
 
     def _atom_is_stereogenic(nkeys):
         pris = list(map(pri_dct.get, nkeys))
@@ -177,6 +165,29 @@ def stereocenter_candidates_grouped(
     def _bond_is_stereogenic(nkeys):
         pris = [list(map(pri_dct.get, nks)) for nks in nkeys]
         return all(len(ps) == 1 or len(set(ps)) == len(ps) for ps in pris)
+
+    cand_atm_dct, cand_bnd_dct = sort_stereocenter_candidates(cand_dct, pri_dct)
+
+    ste_dct = {}
+    ste_dct.update(
+        {k: nks for k, nks in cand_atm_dct.items() if _atom_is_stereogenic(nks)}
+    )
+    ste_dct.update(
+        {k: nks for k, nks in cand_bnd_dct.items() if _bond_is_stereogenic(nks)}
+    )
+    return ste_dct
+
+
+def sort_stereocenter_candidates(
+    cand_dct: CenterNeighborDict,
+    pri_dct: Optional[Dict[AtomKey, int]] = None,
+) -> Tuple[AtomNeighborDict, BondNeighborDict]:
+    """Group stereocenter candidates by type
+
+    :param cand_dct: A mapping of stereocenter candidates onto their neighbor keys
+    :param pri_dct: An optional atom priority mapping for sorting the neighbor keys
+    :return: The atom and bond stereocenter candidates as separate dictionaries
+    """
 
     pri_ = (
         None if pri_dct is None else dict_.sort_value_(pri_dct, missing_val=-numpy.inf)
@@ -188,16 +199,16 @@ def stereocenter_candidates_grouped(
     for key, nkeys in cand_dct.items():
         # Atom
         if isinstance(key, numbers.Number):
-            if pri_ is not None:
-                nkeys = tuple(sorted(nkeys, key=pri_))
-            if not drop_nonste or _atom_is_stereogenic(nkeys):
-                cand_atm_dct[key] = nkeys
+            cand_atm_dct[key] = (
+                nkeys if pri_ is None else tuple(sorted(nkeys, key=pri_))
+            )
         # Bond
         else:
-            if pri_ is not None:
-                nkeys = tuple(tuple(sorted(nks, key=pri_)) for nks in nkeys)
-            if not drop_nonste or _bond_is_stereogenic(nkeys):
-                cand_bnd_dct[key] = nkeys
+            cand_bnd_dct[key] = (
+                nkeys
+                if pri_ is None
+                else tuple(tuple(sorted(nks, key=pri_)) for nks in nkeys)
+            )
 
     return cand_atm_dct, cand_bnd_dct
 
@@ -381,10 +392,10 @@ def local_flipped_parities(
     loc_pri_dct = local_stereo_priorities(gra)
 
     # Group atoms and bonds and sort their neighbors, canonically and locally
-    can_nkeys_dct, can_bnkeys_dct = stereocenter_candidates_grouped(
+    can_nkeys_dct, can_bnkeys_dct = sort_stereocenter_candidates(
         nkeys_dct, pri_dct=pri_dct
     )
-    loc_nkeys_dct, loc_bnkeys_dct = stereocenter_candidates_grouped(
+    loc_nkeys_dct, loc_bnkeys_dct = sort_stereocenter_candidates(
         nkeys_dct, pri_dct=loc_pri_dct
     )
 
@@ -669,7 +680,7 @@ def parity_evaluator_measure_from_geometry_(
 
         # 1. Get sorted neighbor keys for stereocenters
         nkeys_dct = dict_.by_key(nkeys_dct, keys)
-        atm_nkeys_dct, bnd_nkeys_dct = stereocenter_candidates_grouped(
+        atm_nkeys_dct, bnd_nkeys_dct = sort_stereocenter_candidates(
             nkeys_dct, pri_dct=pri_dct
         )
 
