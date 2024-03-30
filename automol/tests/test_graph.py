@@ -2462,10 +2462,10 @@ if __name__ == "__main__":
 
     # test__has_resonance_bond_stereo()
     # test__amchi_with_indices()
-    test__stereogenic_keys()
+    # test__stereogenic_keys()
     # test__kekules_bond_orders_collated()
     # test__inchi_is_bad()
-    # test__expand_stereo()
+    test__expand_stereo()
     # test__species__graph_conversion()
     # test__canonical()
     # test__calculate_priorities_and_assign_parities()
@@ -2487,4 +2487,4 @@ if __name__ == "__main__":
     # test__embed__clean_geometry()
     # test__rotational_coordinates()
     # test__stereo_corrected_geometry()
-    test__stereogenic_keys()
+    # test__stereogenic_keys()

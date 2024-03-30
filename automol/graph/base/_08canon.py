@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy
 from phydat import ptab
 
+from automol import util
 from automol.graph.base._00core import (
     atom_bond_counts,
     atom_implicit_hydrogens,
@@ -535,13 +536,44 @@ def _refine_priorities(
         priorities. Curried such that srt_val_(pri_dct)(key) returns the
         sort value.
     """
+    srt_eval0 = sort_evaluator_atom_invariants_(gra)
+    srt_eval1 = sort_evaluator_special_stereo_(gra)
+
+    pri_dct = _refine_priorities_core(
+        gra=gra, srt_eval_=srt_eval0, pri_dct=pri_dct, neg_hkeys=neg_hkeys
+    )
+    pri_dct = _refine_priorities_core(
+        gra=gra, srt_eval_=srt_eval1, pri_dct=pri_dct, neg_hkeys=neg_hkeys
+    )
+
+    return pri_dct
+
+
+def _refine_priorities_core(
+    gra,
+    srt_eval_: Callable[[Dict[int, int]], Callable[[int], Any]],
+    pri_dct: Optional[Dict[int, int]] = None,
+    neg_hkeys: bool = True,
+):
+    """Refine the canonical priorities for this graph based on some sort value
+
+    (Only for connected graphs)
+
+    :param gra: molecular graph
+    :type gra: automol graph data structure
+    :param pri_dct: A dictionary mapping atom keys to priorities
+    :type pri_dct: dict
+    :param neg_hkeys: Negate hydrogen keys? defaults to True
+    :type neg_hkeys: bool, optional
+    :param srt_eval_: An evaluator for sort values, based on current
+        priorities. Curried such that srt_val_(pri_dct)(key) returns the
+        sort value.
+    """
     keys = sorted(atom_keys(gra))
     pri_dct = {k: 0 for k in keys} if pri_dct is None else pri_dct
 
     # For the refinement algorithm, remove minus signs from hydrogen priorities
     pri_dct = dict_.transform_values(pri_dct, abs)
-
-    srt_eval_ = sort_evaluator_atom_invariants_(gra)
 
     ngb_keys_dct = atoms_neighbor_atom_keys(gra)
 
@@ -762,6 +794,64 @@ def sort_evaluator_atom_invariants_(gra):
             btyps = btyps_dct[key]
             nidxs = tuple(sorted(map(pri_dct.get, nkeys_dct[key])))
             return (symb, deg, hnum, mnum, apar, bpars, btyps, nidxs)
+
+        return _value
+
+    return _evaluator
+
+
+def sort_evaluator_special_stereo_(gra):
+    """A sort function based on atom invariants with two levels of currying.
+
+    To get the sort value for a specific key, use
+        srt_val = sort_evaluator_special_stereo_(gra)(pri_dct)(key)
+
+    My reasoning for doing things this way is that `gra` never changes, but
+    `pri_dct` does, so we need to be able to update the function with new
+    index dictionaries. Ultimately, it is convenient to return a function
+    of `key` only because this can be passed to standard python sorting and
+    grouping functions such as `sorted()` and `itertools.groupby()`.
+
+    Implements a variation of the first "New Invariant" from Scheider (2015).
+
+    :param gra: molecular graph
+    :type gra: automol graph data structure
+    """
+    par_dct = atom_stereo_parities(gra)
+    nkeys_dct = atoms_neighbor_atom_keys(gra)
+
+    srt_eval0_ = sort_evaluator_atom_invariants_(gra)
+
+    def _evaluator(pri_dct: dict):
+        """Sort value evaluator based on current priorities.
+
+        :param pri_dct: A dictionary mapping atom keys to priorities
+        :type pri_dct: dict
+        """
+
+        srt_val0_ = srt_eval0_(pri_dct)
+
+        def _value(key):
+            val = []
+            for key_ in nkeys_dct[key]:
+                pri = pri_dct.get(key_, -numpy.inf)
+                par = par_dct.get(key_)
+                nkeys = nkeys_dct.get(key_)
+                if par is None:
+                    val.append((pri, -numpy.inf))
+                else:
+                    nkeys0 = sorted(nkeys, key=pri_dct.get)
+                    nkeys1 = [key] + sorted(
+                        [k for k in nkeys0 if k != key], key=pri_dct.get
+                    )
+                    is_odd = util.is_odd_permutation(nkeys0, nkeys1)
+                    val.append((pri_dct[key_], is_odd ^ par))
+            val = tuple(sorted(val))
+
+            # Insert this into the original atom invariant value
+            srt_val = list(srt_val0_(key))
+            srt_val.insert(-1, val)
+            return tuple(srt_val)
 
         return _value
 
