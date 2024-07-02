@@ -6,6 +6,7 @@ r"""Functions for dealing with a list of items encoding a ring
                             \     /
                              5---4
 """
+
 import itertools
 from typing import List, Tuple
 
@@ -51,10 +52,37 @@ def distance(
     return min(dists) if not longest else max(dists)
 
 
+def cycle(items: List[object]) -> List[object]:
+    """Cycle ring items once.
+
+    Example:
+        (1, 2, 3, 4) -> (2, 3, 4, 1)
+
+    :param items: The ring items
+    :return: The ring items, cycled once
+    """
+    nitems = len(items)
+    cycler = itertools.cycle(items)
+    next(cycler)
+    return tuple(itertools.islice(cycler, nitems))
+
+
+def edges(items: List[object]) -> List[object]:
+    """Get the edge pairs of a ring.
+
+    Example:
+        (1, 2, 3, 4) -> ((1, 2), (2, 3), (3, 4), (4, 1))
+
+    :param items: The ring items
+    :return: The ring edge pairs
+    """
+    return tuple(zip(items, cycle(items), strict=False))
+
+
 def cycle_item_to_front(
     items: List[object], item: object, end_item: object = None
 ) -> List[object]:
-    """Cycle ring items until one is in front
+    """Cycle ring items until one is in front.
 
     Optionally, request one adjacent item to be at the end, reversing the ring order if
     necessary.
@@ -106,9 +134,7 @@ def cycle_items_to_front(
     return tuple(itertools.islice(cycler, nitems))
 
 
-def cycle_items_to_back(
-    items: List[object], back_items: List[object]
-) -> List[object]:
+def cycle_items_to_back(items: List[object], back_items: List[object]) -> List[object]:
     """Cycle ring items until a group of adjacent items is at the end of the list
 
     :param items: The ring items

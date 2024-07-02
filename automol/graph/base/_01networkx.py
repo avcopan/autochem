@@ -4,7 +4,6 @@ BEFORE ADDING ANYTHING, SEE IMPORT HIERARCHY IN __init__.py!!!!
 """
 
 import operator
-from typing import Optional
 
 import networkx
 
@@ -43,12 +42,15 @@ def from_graph(gra, node_attrib_dct=None, edge_attrib_dct=None):
     return nxg
 
 
-def minimum_cycle_basis(nxg, weight: Optional[str] = None):
-    """minimum cycle basis for the graph"""
-    rng_atm_keys_lst = networkx.algorithms.cycles.minimum_cycle_basis(
+def minimum_cycle_basis(nxg: networkx.Graph, weight: str | None = None):
+    """Cycle basis for the graph."""
+    rng_atm_keys_lst0 = networkx.algorithms.cycles.minimum_cycle_basis(
         nxg, weight=weight
     )
-    return frozenset(map(frozenset, rng_atm_keys_lst))
+    # Ensure that the ordering is correct (not guaranteed by minimum cycle basis)
+    return tuple(
+        tuple(networkx.cycle_basis(nxg.subgraph(ks))[0]) for ks in rng_atm_keys_lst0
+    )
 
 
 def connected_component_atom_keys(nxg):

@@ -930,6 +930,7 @@ def test__from_local_stereo():
 def test__ts__expand_reaction_stereo(formula, ts_gra, ts_counts):
     """test graph.ts.expand_reaction_stereo"""
     print(f"{formula}: testing ts.expand_reaction_stereo")
+    print(f"ts_gra = {ts_gra}")
     _, _, ts_sgras_lst = zip(*graph.ts.expand_reaction_stereo(ts_gra))
     print(list(map(len, ts_sgras_lst)))
     assert list(map(len, ts_sgras_lst)) == ts_counts
@@ -1366,5 +1367,6 @@ if __name__ == "__main__":
     # test__ts__fleeting_stereocenter_keys()
     # test__linear_atom_keys()
     # test__radical_atom_keys()
-    test__geometry()
+    # test__geometry()
     # test__zmatrix()
+    test__ts__expand_reaction_stereo("C5H6O", C5H6O_TSG, [1, 1])
