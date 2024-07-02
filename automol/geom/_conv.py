@@ -188,7 +188,7 @@ def zmatrix(geo, gra=None):
     return zma
 
 
-def zmatrix_with_conversion_info(geo, gra=None, zc_: ZmatConv = None):
+def zmatrix_with_conversion_info(geo, gra=None, zc_: ZmatConv | None = None):
     """Generate a Z-Matrix for a molecular geometry, along with a z-matrix conversion
     data structure describing the conversion
 

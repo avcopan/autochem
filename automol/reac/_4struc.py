@@ -30,7 +30,7 @@ from automol.util import ZmatConv
 
 def with_structures(
     rxn: Reaction,
-    struc_typ: str,
+    struc_typ: str | None,
     rct_strucs=None,
     prd_strucs=None,
     rct_zcs=None,
