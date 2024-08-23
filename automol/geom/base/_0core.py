@@ -606,11 +606,7 @@ def principal_axes(geo, amu=True):
     :type amu: bool
     :rtype: tuple(tuple(float))
     """
-
-    ine = inertia_tensor(geo, amu=amu)
-    _, paxs = numpy.linalg.eigh(ine)
-    paxs = tuple(map(tuple, paxs))
-
+    _, paxs = rotational_analysis(geo, amu=amu)
     return paxs
 
 
@@ -624,12 +620,21 @@ def moments_of_inertia(geo, amu=True):
     :type amu: bool
     :rtype: tuple(tuple(float))
     """
-
-    ine = inertia_tensor(geo, amu=amu)
-    moms, _ = numpy.linalg.eigh(ine)
-    moms = tuple(moms)
-
+    moms, _ = rotational_analysis(geo, amu=amu)
     return moms
+
+
+def rotational_analysis(geo, amu=True):
+    """Do a rotational analysis, generating the moments of inertia and principal axes.
+
+    :param geo: molecular geometry
+    :param amu: parameter to control electron mass -> amu conversion
+    :return: The moments of inertia and principal axes
+    """
+    ine = inertia_tensor(geo, amu=amu)
+    eig_vals, eig_vecs = numpy.linalg.eigh(ine)
+    eig_vals = tuple(eig_vals)
+    return eig_vals, eig_vecs
 
 
 def rotational_constants(geo, amu=True):
@@ -1100,7 +1105,7 @@ def perturb(geo, atm_idx, pert_xyz):
     return pert_geo
 
 
-def rotate(geo, axis, angle, orig_xyz=(0., 0., 0.), idxs=None, degree=False):
+def rotate(geo, axis, angle, orig_xyz=(0.0, 0.0, 0.0), idxs=None, degree=False):
     """Rotate the coordinates of a molecular geometry about
     an axis by a specified angle. A set of `idxs` can be supplied
     to transform a subset of coordinates.
