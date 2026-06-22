@@ -1,0 +1,76 @@
+[project]
+name = "autochem"
+version = "0.0.0"
+authors = [{name = "Andreas V. Copan", email = "avcopan@uga.edu"}]
+requires-python = ">= 3.12"
+dependencies = []
+
+[build-system]
+build-backend = "uv_build"
+requires = ["uv_build<0.12"]
+
+# Ruff configurations
+[tool.ruff]
+exclude = [
+    "docs",
+    "**/*.ipynb",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",   # missing trailing comma (handled by format)
+    "RUF022",   # `__all__` is not sorted
+    "TID252",   # relative import
+    "D203",     # confict: incorrect blank line before class (uses D211 instead)
+    "D213",     # conflict: multi-line summary second line (uses D212 instead)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**.py" = ["S101"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+# Ty configurations
+[tool.ty.environment]
+python = ".pixi/envs/dev/bin/python"
+
+[tool.ty.src]
+include = [
+    "src",
+    "tests",
+]
+
+# Import-linter configurations
+[tool.importlinter]
+root_package = "autochem"
+
+[[tool.importlinter.contracts]]
+name = "Module Layering"
+type = "layers"
+layers = [
+    "autochem.layer2",
+    "autochem.layer1",
+]
+
+# Pytest configurations
+[tool.pytest.ini_options]
+testpaths = ["tests", "src"]
+addopts = [
+    "--doctest-modules",
+    "--cov=autochem",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+doctest_optionflags = "NORMALIZE_WHITESPACE"
+
+# Pytest-cov configurations
+[tool.coverage.run]
+branch = true
+source = ["autochem"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 80

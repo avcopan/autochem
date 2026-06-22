@@ -1,0 +1,10 @@
+{
+  "cookiecutter": {
+    "project_name": "autochem",
+    "package_name": "autochem",
+    "author_name": "Andreas V. Copan",
+    "author_email": "avcopan@uga.edu",
+    "github_org_name": "avcopan",
+    "anaconda_org_name": "avcopan"
+  }
+}
